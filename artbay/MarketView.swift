@@ -310,10 +310,12 @@ struct MarketItemCard: View {
             }
             Button(action: { onAction() }) {
                 HStack {
+                    Spacer()
                     Image(systemName: marketType == 0 ? "gavel" : "calendar")
                     Text(marketType == 0 ? "Bid $\(String(format: "%.2f", item.currentPrice))" : "Rent $\(String(format: "%.2f", item.basePrice))")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
+                    Spacer()
                 }
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity)
