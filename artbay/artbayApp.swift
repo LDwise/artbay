@@ -1,7 +1,7 @@
 //
 //  artbayApp.swift
 //  artbay
-//
+//  https://github.com/ldwise/artbay
 //  Created by user on 17/6/2025.
 //
 

@@ -1,74 +1,90 @@
 import SwiftUI
 import AuthenticationServices
 
+struct SignInMethod {
+    let name: String
+    let icon: String?
+}
+
 struct SignInView: View {
     @EnvironmentObject var viewModel: AppViewModel
     @State private var progress: CGFloat = 0.0
+    
+    private let signInMethods: [SignInMethod] = [
+        SignInMethod(name: "Apple", icon: nil),
+        SignInMethod(name: "Google", icon: "g.circle.fill"),
+        SignInMethod(name: "Microsoft", icon: "m.circle.fill"),
+        SignInMethod(name: "Facebook", icon: "f.circle.fill")
+    ]
+    
     var body: some View {
         ZStack {
-            Color(.systemGroupedBackground).ignoresSafeArea()
             VStack(spacing: 0) {
-                Spacer(minLength: 32)
                 // Header
-                HStack {
-                    Spacer()
-                    Image(systemName: "paintbrush.pointed")
-                        .font(.title)
-                        .foregroundColor(Color("AccentColor"))
+                HStack(spacing: 0) {
+                    Image("AppIconImage")
+                        .resizable()
+                        .aspectRatio(1, contentMode: .fit)
+                        .frame(maxWidth: 100)
                     Text("ArtBay")
                         .font(.largeTitle).bold()
-                    Spacer()
                 }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 12)
                 // Card container
                 VStack(spacing: 28) {
                     VStack(spacing: 10) {
                         Text("Sign in to continue")
-                            .font(.title).bold()
+                            .font(.title)
+                            .bold()
                             .multilineTextAlignment(.center)
                         Text("New users will be automatically registered")
-                            .font(.body)
-                            .foregroundColor(Color.primary.opacity(0.7))
                             .multilineTextAlignment(.center)
+                            .foregroundColor(Color.secondary)
                     }
-                    VStack(spacing: 18) {
-                        SignInWithAppleButton(
-                            onRequest: { request in
-                                signIn(method: "Apple")
-                            },
-                            onCompletion: { result in
-                                signIn(method: "apple")
+                    VStack(spacing: 20) {
+                        ForEach(signInMethods, id: \.name) { method in
+                            if method.name == "Apple" {
+                                SignInWithAppleButton(
+                                    onRequest: { _ in
+                                        signIn(method: method.name)
+                                    },
+                                    onCompletion: { _ in
+                                        signIn(method: method.name)
+                                    }
+                                )
+                                .frame(height: 48)
+                            } else {
+                                Button(action: { signIn(method: method.name) }) {
+                                    HStack {
+                                        if let icon = method.icon {
+                                            Image(systemName: icon)
+                                                .font(.title2)
+                                        }
+                                        Text("Sign in with \(method.name)")
+                                            .multilineTextAlignment(.center)
+                                            .font(.headline)
+                                            .foregroundColor(Color.primary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding()
+                                    .background(Color(.secondarySystemBackground))
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
                             }
-                        )
-                        .signInWithAppleButtonStyle(.black)
-                        .frame(height: 48)
-                        SignInButton(label: "Sign in with Google", icon: "g.circle.fill") {
-                            signIn(method: "Google")
-                        }
-                        SignInButton(label: "Sign in with Microsoft", icon: "m.circle.fill") {
-                            signIn(method: "Microsoft")
-                        }
-                        SignInButton(label: "Sign in with Facebook", icon: "f.circle.fill") {
-                            signIn(method: "Facebook")
                         }
                     }
-                    .padding(.top, 8)
                     ProgressView(value: progress)
                         .progressViewStyle(LinearProgressViewStyle())
-                        .padding(.top, 8)
                     Text("By signing in, you agree to our Terms and Conditions")
                         .font(.footnote)
-                        .foregroundColor(Color.primary.opacity(0.7))
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                        .foregroundColor(Color.secondary)
                 }
                 .padding(24)
                 .background(Color(.systemBackground))
                 .cornerRadius(20)
-                .shadow(color: Color(.black).opacity(0.07), radius: 8, x: 0, y: 2)
+                .shadow(color: Color.primary.opacity(0.07), radius: 8, x: 0, y: 2)
                 .padding(.horizontal, 24)
-                Spacer()
             }
         }
     }
@@ -85,32 +101,6 @@ struct SignInView: View {
             withAnimation {
                 viewModel.state = .signedIn
             }
-        }
-    }
-}
-
-struct SignInButton: View {
-    let label: String
-    let icon: String
-    var action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.title2)
-                Text(label)
-                    .font(.headline)
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color(.secondarySystemBackground))
-            .foregroundColor(.primary)
-            .cornerRadius(14)
-            .shadow(color: Color(.black).opacity(0.04), radius: 2, x: 0, y: 1)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color("AccentColor").opacity(0.18), lineWidth: 1.2)
-            )
         }
     }
 }

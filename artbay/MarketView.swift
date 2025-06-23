@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UIKit
+import SwiftData
 
 struct Category: Identifiable, Hashable {
     let id = UUID()
@@ -36,6 +37,7 @@ struct MarketView: View {
     @State private var minPrice: Double = 0
     @State private var maxPrice: Double = 10000
     @State private var sortOption: String = "Newest"
+    @State private var scrollOffset: CGFloat = 0
     
     let sortOptions = ["Newest", "Price: Low to High", "Price: High to Low", "Popularity"]
     let artCategories: [Category] = [
@@ -57,14 +59,28 @@ struct MarketView: View {
     }
     var filteredItems: [Item] {
         let items = marketType == 0 ? Item.demoArtItems : Item.demoSpaceItems
+        
+        // Filter by category
         var filtered = items
         if let selected = selectedCategory, selected.name != "All" {
             filtered = filtered.filter { $0.category == selected.name }
         }
-        filtered = filtered.filter { $0.basePrice >= selectedPriceRange.lowerBound && $0.basePrice <= selectedPriceRange.upperBound }
-        if !searchText.isEmpty {
-            filtered = filtered.filter { $0.title.localizedCaseInsensitiveContains(searchText) || $0.itemDescription.localizedCaseInsensitiveContains(searchText) }
+        
+        // Filter by price range
+        filtered = filtered.filter { 
+            $0.basePrice >= selectedPriceRange.lowerBound && 
+            $0.basePrice <= selectedPriceRange.upperBound 
         }
+        
+        // Filter by search text
+        if !searchText.isEmpty {
+            filtered = filtered.filter { 
+                $0.title.localizedCaseInsensitiveContains(searchText) || 
+                $0.itemDescription.localizedCaseInsensitiveContains(searchText) 
+            }
+        }
+        
+        // Sort items
         switch sortOption {
         case "Price: Low to High":
             filtered = filtered.sorted { $0.basePrice < $1.basePrice }
@@ -75,6 +91,7 @@ struct MarketView: View {
         default:
             filtered = filtered.sorted { $0.timestamp > $1.timestamp }
         }
+        
         return filtered
     }
     var priceRange: ClosedRange<Double> {
@@ -86,49 +103,91 @@ struct MarketView: View {
     var body: some View {
         ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 20) {
-                // Header
+            VStack(alignment: .leading, spacing: 0) {
+                // Shrinking Header
+                let minHeaderHeight: CGFloat = 44
+                let maxHeaderHeight: CGFloat = 72
+                let minFont: CGFloat = 20
+                let maxFont: CGFloat = 34
+                let minIcon: CGFloat = 22
+                let maxIcon: CGFloat = 32
+                let shrink = min(max(scrollOffset / 60, 0), 1)
                 HStack {
                     Image(systemName: "cart")
-                        .font(.title)
+                        .font(.system(size: maxIcon - (maxIcon - minIcon) * shrink))
                         .foregroundColor(Color("AccentColor"))
                     Text("Marketplace")
-                        .font(.largeTitle).bold()
+                        .font(.system(size: maxFont - (maxFont - minFont) * shrink, weight: .bold))
                     Spacer()
                 }
-                .padding(.top, 8)
+                .frame(height: maxHeaderHeight - (maxHeaderHeight - minHeaderHeight) * shrink)
+                .padding(.top, 8 - 4 * shrink)
                 // Market type picker
                 Picker(selection: $marketType, label: Text("Market Type")) {
                     Text("Art Work").tag(0)
                     Text("Space").tag(1)
                 }
                 .pickerStyle(SegmentedPickerStyle())
-                // Search bar
-                MarketSearchBar(searchText: $searchText)
-                // Filter bar
-                MarketFilterBar(
-                    selectedCategory: $selectedCategory,
-                    selectedPriceRange: $selectedPriceRange,
-                    sortOption: $sortOption,
-                    priceRange: priceRange,
-                    sortOptions: sortOptions,
-                    categories: categories
-                )
-                .onAppear {
-                    selectedPriceRange = priceRange
+                .scaleEffect(1 - 0.15 * shrink)
+                .padding(.vertical, 4 - 2 * shrink)
+                // Shrinking search/filter
+                VStack(spacing: 8 - 4 * shrink) {
+                    MarketSearchBar(searchText: $searchText, compact: shrink > 0.5)
+                    MarketFilterBar(
+                        selectedCategory: $selectedCategory,
+                        selectedPriceRange: $selectedPriceRange,
+                        sortOption: $sortOption,
+                        priceRange: priceRange,
+                        sortOptions: sortOptions,
+                        categories: categories,
+                        compact: shrink > 0.5
+                    )
+                    .onAppear {
+                        selectedPriceRange = priceRange
+                    }
                 }
-                // Grid of items
-                MarketGrid(items: filteredItems, expandedItemID: $expandedItemID, onExpand: { id in expandedItemID = id }, marketType: marketType)
+                .padding(.bottom, 8 - 4 * shrink)
+                // Scrollable grid with offset tracking
+                ScrollView {
+                    GeometryReader { geo in
+                        Color.clear
+                            .preference(key: ScrollOffsetKey.self, value: geo.frame(in: .named("scroll")).minY)
+                    }
+                    .frame(height: 0)
+                    MarketGrid(items: filteredItems, expandedItemID: $expandedItemID, onExpand: { id in expandedItemID = id }, marketType: marketType)
+                }
+                .coordinateSpace(name: "scroll")
+                .onPreferenceChange(ScrollOffsetKey.self) { value in
+                    scrollOffset = -value
+                }
             }
             .padding([.horizontal, .bottom])
             .onTapGesture { hideKeyboard() }
+            .onAppear {
+                selectedPriceRange = priceRange
+            }
+            .onChange(of: marketType) { oldValue, newValue in
+                selectedPriceRange = priceRange
+            }
+            .onChange(of: priceRange) { oldValue, newValue in
+                selectedPriceRange = priceRange
+            }
         }
+    }
+}
+
+// PreferenceKey for scroll offset
+struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
 struct MarketSearchBar: View {
     @Binding var searchText: String
     @FocusState private var isFocused: Bool
+    var compact: Bool = false
     var body: some View {
         HStack {
             Image(systemName: "magnifyingglass")
@@ -137,6 +196,7 @@ struct MarketSearchBar: View {
                 .textFieldStyle(PlainTextFieldStyle())
                 .focused($isFocused)
                 .onSubmit { isFocused = false }
+                .font(compact ? .subheadline : .body)
             if !searchText.isEmpty {
                 Button(action: { searchText = ""; isFocused = false }) {
                     Image(systemName: "xmark.circle.fill")
@@ -144,9 +204,10 @@ struct MarketSearchBar: View {
                 }
             }
         }
-        .padding(10)
+        .padding(compact ? 6 : 10)
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(10)
+        .cornerRadius(compact ? 8 : 10)
+        .scaleEffect(compact ? 0.95 : 1)
         .onTapGesture { isFocused = true }
     }
 }
@@ -158,29 +219,30 @@ struct MarketFilterBar: View {
     let priceRange: ClosedRange<Double>
     let sortOptions: [String]
     let categories: [Category]
+    var compact: Bool = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: compact ? 6 : 12) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: compact ? 6 : 10) {
                     ForEach(categories) { category in
                         Button(action: {
                             selectedCategory = selectedCategory == category ? nil : category
                         }) {
                             HStack {
                                 Image(systemName: category.icon)
-                                    .font(.subheadline)
+                                    .font(compact ? .caption : .subheadline)
                                 Text(category.name)
-                                    .font(.caption)
+                                    .font(compact ? .caption2 : .caption)
                             }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 14)
+                            .padding(.vertical, compact ? 6 : 8)
+                            .padding(.horizontal, compact ? 10 : 14)
                             .background(selectedCategory == category ? Color("AccentColor") : Color(.systemGray5))
                             .foregroundColor(selectedCategory == category ? .white : .primary)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16)
+                                RoundedRectangle(cornerRadius: compact ? 12 : 16)
                                     .stroke(selectedCategory == category ? Color("AccentColor") : Color(.systemGray4), lineWidth: 1)
                             )
-                            .cornerRadius(16)
+                            .cornerRadius(compact ? 12 : 16)
                             .shadow(color: selectedCategory == category ? Color("AccentColor").opacity(0.2) : .clear, radius: 4, x: 0, y: 2)
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -188,73 +250,43 @@ struct MarketFilterBar: View {
                 }
                 .padding(.vertical, 2)
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Price Range")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                RangeSlider(range: $selectedPriceRange, bounds: priceRange)
-                HStack {
-                    Text("$\(Int(selectedPriceRange.lowerBound))")
-                    Spacer()
-                    Text("$\(Int(selectedPriceRange.upperBound))")
+            HStack(alignment: .center, spacing: compact ? 8 : 16) {
+                // Price Range (left)
+                VStack(alignment: .leading, spacing: compact ? 2 : 6) {
+                    Text("Max Price")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    HStack(spacing: compact ? 4 : 8) {
+                        Text("$\(Int(priceRange.lowerBound))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(minWidth: 40, alignment: .leading)
+                        Slider(value: Binding(
+                            get: { selectedPriceRange.upperBound },
+                            set: { newValue in
+                                selectedPriceRange = priceRange.lowerBound...newValue
+                            }
+                        ), in: priceRange, step: 1)
+                        .accentColor(Color("AccentColor"))
+                        .frame(minWidth: compact ? 80 : 120, maxWidth: compact ? 140 : 220)
+                        Text("$\(Int(selectedPriceRange.upperBound))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(minWidth: 40, alignment: .trailing)
+                    }
                 }
-                .font(.caption)
-                .foregroundColor(.secondary)
-            }
-            Picker("Sort", selection: $sortOption) {
-                ForEach(sortOptions, id: \ .self) { option in
-                    Text(option)
+                // Sorting (right)
+                Spacer()
+                Picker("Sort", selection: $sortOption) {
+                    ForEach(sortOptions, id: \ .self) { option in
+                        Text(option)
+                    }
                 }
+                .pickerStyle(MenuPickerStyle())
+                .frame(maxWidth: compact ? 90 : 140)
+                .scaleEffect(compact ? 0.92 : 1)
             }
-            .pickerStyle(MenuPickerStyle())
         }
-    }
-}
-
-struct RangeSlider: View {
-    @Binding var range: ClosedRange<Double>
-    let bounds: ClosedRange<Double>
-    var body: some View {
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let minValue = bounds.lowerBound
-            let maxValue = bounds.upperBound
-            let lower = CGFloat((range.lowerBound - minValue) / (maxValue - minValue)) * width
-            let upper = CGFloat((range.upperBound - minValue) / (maxValue - minValue)) * width
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color(.systemGray5))
-                    .frame(height: 6)
-                Capsule()
-                    .fill(Color("AccentColor"))
-                    .frame(width: upper - lower, height: 6)
-                    .offset(x: lower)
-                Circle()
-                    .fill(Color("AccentColor"))
-                    .frame(width: 24, height: 24)
-                    .offset(x: lower - 12)
-                    .gesture(DragGesture().onChanged { value in
-                        let percent = min(max(0, value.location.x / width), 1)
-                        let newValue = minValue + Double(percent) * (maxValue - minValue)
-                        if newValue < range.upperBound {
-                            range = newValue...range.upperBound
-                        }
-                    })
-                Circle()
-                    .fill(Color("AccentColor"))
-                    .frame(width: 24, height: 24)
-                    .offset(x: upper - 12)
-                    .gesture(DragGesture().onChanged { value in
-                        let percent = min(max(0, value.location.x / width), 1)
-                        let newValue = minValue + Double(percent) * (maxValue - minValue)
-                        if newValue > range.lowerBound {
-                            range = range.lowerBound...newValue
-                        }
-                    })
-            }
-            .frame(height: 24)
-        }
-        .frame(height: 24)
     }
 }
 
@@ -346,31 +378,25 @@ struct MarketGrid: View {
     var onExpand: (UUID?) -> Void = { _ in }
     var marketType: Int
     var body: some View {
-        GeometryReader { geometry in
-            let minCardWidth: CGFloat = 220
-            let spacing: CGFloat = 16
-            let totalWidth = geometry.size.width - spacing
-            let columnCount = max(Int(totalWidth / (minCardWidth + spacing)), 1)
-            let columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: columnCount)
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: spacing) {
-                    ForEach(items) { item in
-                        let itemUUID = item.id as? UUID
-                        if expandedItemID == itemUUID {
-                            MarketItemCard(item: item, expanded: true, onExpand: { onExpand(nil) }, onAction: {}, marketType: marketType)
-                                .frame(maxWidth: .infinity)
-                                .transition(.move(edge: .top))
-                                .zIndex(1)
-                                .onTapGesture { onExpand(nil) }
-                        } else {
-                            MarketItemCard(item: item, expanded: false, onExpand: { onExpand(itemUUID) }, onAction: {}, marketType: marketType)
-                                .zIndex(0)
-                        }
-                    }
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 16),
+            GridItem(.flexible(), spacing: 16)
+        ], spacing: 16) {
+            ForEach(items) { item in
+                let itemID = item.id
+                if expandedItemID == itemID {
+                    MarketItemCard(item: item, expanded: true, onExpand: { onExpand(nil) }, onAction: {}, marketType: marketType)
+                        .frame(maxWidth: .infinity)
+                        .transition(.move(edge: .top))
+                        .zIndex(1)
+                        .onTapGesture { onExpand(nil) }
+                } else {
+                    MarketItemCard(item: item, expanded: false, onExpand: { onExpand(itemID) }, onAction: {}, marketType: marketType)
+                        .zIndex(0)
                 }
-                .padding(.top, 8)
             }
         }
+        .padding(.top, 8)
     }
 }
 
@@ -381,3 +407,7 @@ extension View {
     }
 }
 #endif
+
+#Preview {
+    MarketView()
+}

@@ -326,9 +326,9 @@ private struct SettingsSupportView: View {
                     Text(isDarkMode ? "Dark Mode" : "Light Mode")
                 }
             }
-            .onChange(of: isDarkMode) { value in
+            .onChange(of: isDarkMode) { oldValue, newValue in
                 // Fix deprecated onChange and windows usage
-                // UIApplication.shared.windows.first?.overrideUserInterfaceStyle = value ? .dark : .light
+                // UIApplication.shared.windows.first?.overrideUserInterfaceStyle = newValue ? .dark : .light
             }
             Button(action: {}) {
                 HStack {

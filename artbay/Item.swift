@@ -9,7 +9,8 @@ import Foundation
 import SwiftData
 
 @Model
-final class Item {
+final class Item: Identifiable {
+    var id: UUID
     var title: String
     var itemDescription: String // Renamed from 'description'
     var category: String
@@ -24,6 +25,7 @@ final class Item {
     var currentPrice: Double
     
     init(title: String, itemDescription: String, category: String, basePrice: Double, priceIncrement: Double, imagePath: String?, timestamp: Date, artist: String, popularity: Int, isAuction: Bool, currentPrice: Double) {
+        self.id = UUID()
         self.title = title
         self.itemDescription = itemDescription
         self.category = category
